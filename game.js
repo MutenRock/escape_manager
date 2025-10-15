@@ -1,63 +1,154 @@
-(() => {
-  // Canvas
+(()=>{
+  // ===== Canvas full-screen & resize =====
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  const FPS = 60;
+  function resizeCanvas(){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width  = Math.floor(window.innerWidth  * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width  = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0); // coord en CSS pixels
+    rebuildLayout(); // recalc zones & slots selon la taille
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
 
-  // Zones & murs
-  const HQ = { x:60, y:40, w:280, h:170 };
-  const WAIT = { x: W-340, y:40, w:280, h:170 };
-  const MISSION = { x:60, y:270, w: W-120, h: H-330 };
-  const WALLS = [
-    {x:0,y:0,w:W,h:20},{x:0,y:H-20,w:W,h:20},{x:0,y:0,w:20,h:H},{x:W-20,y:0,w:20,h:H},
-    {x:20,y:230,w:W-40,h:10}, {x:20,y:230,w:30,h:10}, {x:W-50,y:230,w:30,h:10}
-  ];
-  const BTN_HELP = { x: HQ.x + HQ.w/2 - 60, y: HQ.y + HQ.h/2 - 18, w:120, h:36 };
+  // ===== Layout dynamique =====
+  let W = () => canvas.clientWidth;
+  let H = () => canvas.clientHeight;
 
-  // Joueur
-  const PLAYER = { x: HQ.x + HQ.w/2 - 20, y: HQ.y + HQ.h + 40, w:40, h:40, speed:5 };
+  // Zones recalculées (en fonction de l'écran)
+  let HQ, WAIT, MISSION, WALLS, BTN_HELP;
+  function rebuildLayout(){
+    const w = W(), h = H();
+    HQ  = { x: Math.round(w*0.06), y: Math.round(h*0.06), w: Math.round(w*0.29), h: Math.round(h*0.22) };
+    WAIT= { x: w - Math.round(w*0.35), y: Math.round(h*0.06), w: Math.round(w*0.29), h: Math.round(h*0.22) };
+    MISSION = { x: Math.round(w*0.06), y: Math.round(h*0.42), w: w - Math.round(w*0.12), h: h - Math.round(h*0.50) };
+    // Mur horizontal séparateur avec OUVERURE CENTRALE
+    const wallY = Math.round(h*0.36);
+    const gapW = Math.max(140, Math.floor(w*0.12)); // ouverture centrale
+    const segW = Math.floor((w - gapW - 40) / 2);
+    WALLS = [
+      {x:0, y:0, w:w, h:20}, {x:0, y:h-20, w:w, h:20},
+      {x:0, y:0, w:20, h:h}, {x:w-20, y:0, w:20, h:h},
+      // segments du mur horizontal (gauche et droite), gap au centre
+      {x:20, y:wallY, w:segW, h:10},
+      {x:20 + segW + gapW, y:wallY, w: segW, h:10},
+    ];
+    BTN_HELP = { x: HQ.x + Math.floor(HQ.w/2) - 60, y: HQ.y + Math.floor(HQ.h/2) - 18, w:120, h:36 };
+
+    rebuildMissionGrid();
+    rebuildWaitingSlots();
+    // Clamp player dans les bornes si resize
+    player.x = clamp(player.x, 20, w-20-player.w);
+    player.y = clamp(player.y, 20, h-20-player.h);
+  }
+
+  // ===== Joueur (ZQSD par défaut + flèches) =====
+  const player = { x: 200, y: 300, w: 40, h: 40, speed: 5.2 };
   const keys = {};
+  document.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+  document.addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
+
+  // ===== Données gameplay minimales conservées =====
+  const GROUP_SIZE_PX = 30;
+  let day=1, money=120, groupsNeeded=8, groupsSpawned=0, groupsServed=0;
 
   // Groupes
-  const GROUP_SIZE_PX = 30;
-  const groupsMoving = [];   // en approche
-  const groupsWaiting = [];  // en salle d'attente
-  let selectedGroup = null;
-  const GROUP_SPAWN_DELAY = 3; // sec
-  let spawnTimer = 0;
+  const groupsMoving = [];   // {x,y,w,h,clients,targetX,targetY,speed,state,satisfaction,slotIndex}
+  const groupsWaiting = [];  // idem quand posés
 
-  // Tables d'accueil (capacité visuelle / slots de file)
-  let tablesCount = 2; // commence avec 2 tables
-  const TABLE_PRICE = 40;
+  // ===== Slots de la salle d'attente (grille + chaises) =====
+  let waitingSlots = []; // {x,y,w,h, occupiedBy: group|null, reserved:bool}
+  function rebuildWaitingSlots(){
+    const pad = 16;
+    const cell = GROUP_SIZE_PX + 12; // taille de cellule (siège)
+    const cols = Math.max(1, Math.floor((WAIT.w - pad*2) / cell));
+    const rows = Math.max(1, Math.floor((WAIT.h - pad*2) / cell));
+    waitingSlots = [];
+    const ox = WAIT.x + pad;
+    const oy = WAIT.y + pad;
+    for (let r=0; r<rows; r++){
+      for (let c=0; c<cols; c++){
+        const x = Math.round(ox + c*cell);
+        const y = Math.round(oy + r*cell);
+        waitingSlots.push({ x, y, w: GROUP_SIZE_PX, h: GROUP_SIZE_PX, occupiedBy: null, reserved: false });
+      }
+    }
+    // Re-dispatch des groupes si resize : on les recale dans les nouveaux slots
+    const allWaiting = [...groupsWaiting, ...groupsMoving.filter(g=>g.state==='waiting'), ...(selectedGroup?[selectedGroup]:[])];
+    // reset slots
+    waitingSlots.forEach(s=>{ s.occupiedBy=null; s.reserved=false; });
+    // ré-assigne en remplissant ligne par ligne
+    let i=0;
+    for (const g of allWaiting){
+      if (i >= waitingSlots.length) break;
+      const s = waitingSlots[i++];
+      g.x = s.x; g.y = s.y; g.slotIndex = waitingSlots.indexOf(s);
+      s.occupiedBy = g;
+    }
+  }
 
-  // Salles
+  // Dessin des chaises (SVG vector Path2D)
+  const chairPath = (() => {
+    // Petite chaise stylisée (siège + dossier + pieds), taille 20x20, on scale ensuite
+    const p = new Path2D();
+    // siège
+    p.rect(2, 10, 16, 6);
+    // dossier
+    p.rect(2, 4, 16, 4);
+    // pieds
+    p.rect(3, 16, 3, 4);
+    p.rect(14, 16, 3, 4);
+    return p;
+  })();
+  function drawChair(x, y, size, state="empty"){
+    // size ~ GROUP_SIZE_PX; on centre la chaise dans la cellule
+    const s = size / 20; // scale 20->size
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fillStyle = state==="occupied" ? "#c9c9c9" : state==="reserved" ? "#e6d07a" : "#efefef";
+    ctx.strokeStyle = "#888";
+    ctx.lineWidth = 1.2 / s;
+    ctx.fill(chairPath);
+    ctx.stroke(chairPath);
+    ctx.restore();
+  }
+
+  // ===== Salles (2 initiales + grille de mission) =====
   const ROOM_W = 120, ROOM_H = 60;
-  const rooms = [];
-  const ROOM_BASE_TIME = 20; // sec
-  const SAT_LOSS_PER_SEC = 2.0;
-  const HELP_WINDOW_SEC = 30;
-  const HELP_CHANCE_PER_SEC = 0.06;
-
-  function gridPositions(){
-    const cols = Math.max(1, Math.floor((MISSION.w - 20) / (ROOM_W + 20)));
-    const rows = Math.max(1, Math.floor((MISSION.h - 20) / (ROOM_H + 20)));
+  const rooms = []; // {x,y,w,h,name,class,occupied,timer,group,needHelp,helpTimer}
+  function missionGridPositions(){
+    const pad = 10, gap = 20;
+    const cols = Math.max(1, Math.floor((MISSION.w - pad*2) / (ROOM_W + gap)));
+    const rows = Math.max(1, Math.floor((MISSION.h - pad*2) / (ROOM_H + gap)));
     const pts = [];
-    const sx = MISSION.x + 10;
-    const sy = MISSION.y + 10;
+    const sx = MISSION.x + pad;
+    const sy = MISSION.y + pad;
     for (let r=0;r<rows;r++){
       for (let c=0;c<cols;c++){
-        pts.push({ x: sx + c*(ROOM_W+20), y: sy + r*(ROOM_H+20) });
+        pts.push({ x: sx + c*(ROOM_W+gap), y: sy + r*(ROOM_H+gap) });
       }
     }
     return pts;
   }
-  const GRID = gridPositions();
+  let MISSION_GRID = [];
+  function rebuildMissionGrid(){
+    MISSION_GRID = missionGridPositions();
+    // reclampe salles si resize
+    rooms.forEach((r,i) => {
+      if (i < MISSION_GRID.length){
+        r.x = MISSION_GRID[i].x; r.y = MISSION_GRID[i].y;
+      }
+    });
+  }
 
-  function addRoomAtNextSlot(info){
+  function addRoomAtNext(info){
     const idx = rooms.length;
-    if (idx >= GRID.length) return false;
-    const p = GRID[idx];
+    if (idx >= MISSION_GRID.length) return false;
+    const p = MISSION_GRID[idx];
     rooms.push({
       x:p.x, y:p.y, w:ROOM_W, h:ROOM_H,
       name:info.name, class:info.class,
@@ -68,231 +159,93 @@
   }
 
   // 2 salles initiales
-  addRoomAtNextSlot(Utils.randRoom());
-  addRoomAtNextSlot(Utils.randRoom());
+  addRoomAtNext(Utils.randRoom());
+  addRoomAtNext(Utils.randRoom());
 
-  // Jours / économie / loyer
-  let day = 1;
-  let money = 120;
-  let groupsNeeded = 6;
-  let groupsSpawned = 0;
-  let groupsServed = 0;
-
-  let rentEveryNDays = 3;
-  let rentBase = 50;
-  let rentIncrease = 20; // le loyer augmente à chaque paiement
-  let rentsPaid = 0;
-
-  // Overlay boutique
-  const overlay = document.getElementById('overlay');
-  const shopChoicesBox = document.getElementById('shopChoices');
-  const buyTableBtn = document.getElementById('buyTableBtn');
-  const skipBtn = document.getElementById('skipBtn');
-  const rentInfo = document.getElementById('rentInfo');
-  let shopOpen = false;
-  let shopChoices = [];
-
-  // Game Over overlay
-  const overlayGameOver = document.getElementById('overlayGameOver');
-  const reloadBtn = document.getElementById('reloadBtn');
-
-  function openGameOver(){
-    overlayGameOver.classList.remove('hidden');
-  }
-  reloadBtn.addEventListener('click', ()=> location.reload());
-
-  function payRentIfDue(){
-    if (day % rentEveryNDays !== 0) return;
-    const rent = rentBase + rentIncrease * rentsPaid;
-    rentInfo.classList.remove('hidden');
-    rentInfo.textContent = `Loyer dû aujourd'hui : -${rent}€`;
-    money -= rent;
-    rentsPaid += 1;
-    if (money < 0){
-      // banqueroute
-      overlay.classList.add('hidden');
-      shopOpen = false;
-      openGameOver();
-    }
-  }
-
-  function renderShop(){
-    shopChoicesBox.innerHTML = '';
-    shopChoices.forEach((c,i)=>{
-      const div = document.createElement('div');
-      div.className = 'choice';
-      const badgeClass = c.class==='S'?'clsS':c.class==='A'?'clsA':c.class==='B'?'clsB':'clsC';
-      const price = PRICE[c.class];
-      div.innerHTML = `
-        <div class="badge ${badgeClass}">${c.class}</div>
-        <div style="flex:1">
-          <div><b>${c.name}</b></div>
-          <div class="small">Prix : ${price}€</div>
-        </div>
-        <div class="small">Appuyez <span class="kbd">${i+1}</span></div>
-      `;
-      shopChoicesBox.appendChild(div);
-    });
-  }
-
-  function openShop(){
-    shopChoices = [Utils.randRoom(), Utils.randRoom(), Utils.randRoom()];
-    rentInfo.classList.add('hidden');
-    renderShop();
-    overlay.classList.remove('hidden');
-    shopOpen = true;
-    // Payer le loyer si nécessaire
-    payRentIfDue();
-  }
-
-  function closeShop(advanceDay=true){
-    overlay.classList.add('hidden');
-    shopOpen = false;
-    if (advanceDay){
-      day += 1;
-      groupsNeeded += 2;
-      groupsSpawned = 0;
-      groupsServed = 0;
-      spawnTimer = 0;
-    }
-  }
-
-  function buyChoice(i){
-    const choice = shopChoices[i];
-    const price = PRICE[choice.class];
-    if (money >= price){
-      if (addRoomAtNextSlot(choice)){
-        money -= price;
-      }
-    }
-    closeShop(true);
-  }
-
-  buyTableBtn.addEventListener('click', ()=>{
-    if (money >= TABLE_PRICE){
-      money -= TABLE_PRICE;
-      tablesCount += 1;
-    }
-    closeShop(true);
-  });
-  skipBtn.addEventListener('click', ()=> closeShop(true));
-
-  // Entrées
-  document.addEventListener('keydown', (e)=>{
-    keys[e.key.toLowerCase()] = true;
-    if (shopOpen){
-      if (e.key === 'Escape'){ closeShop(true); }
-      if (e.key === '1'){ buyChoice(0); }
-      if (e.key === '2'){ buyChoice(1); }
-      if (e.key === '3'){ buyChoice(2); }
-      if (e.key.toLowerCase() === 't'){ buyTableBtn.click(); }
-      return;
-    }
-    if (e.key.toLowerCase() === 'e') tryPickOrAssign();
-    if (e.key.toLowerCase() === 'h') helpIfInHQ();
-    if (e.key.toLowerCase() === 'm') openShop(); // forcer fin de journée (tests)
-  });
-  document.addEventListener('keyup', (e)=>{ keys[e.key.toLowerCase()] = false; });
-
-  // Spawn groupes
-  function nextWaitingSlotY(){
-    // Slots = tablesCount (capacité "idéale" de file)
-    const perSlot = GROUP_SIZE_PX + 10;
-    let idx = Math.min(groupsWaiting.length + groupsMoving.filter(g=>g.state==='moving').length, tablesCount-1);
-    if (idx < 0) idx = 0;
-    let y = WAIT.y + 20 + idx*perSlot;
-    y = Math.min(y, WAIT.y + WAIT.h - GROUP_SIZE_PX - 10);
-    return y;
+  // ===== Spawning groupes avec slots =====
+  const GROUP_SPEED = 140; // px/s
+  const GROUP_SPAWN_DELAY = 3; // s
+  let spawnTimer = 0;
+  function findFreeSlot(){
+    return waitingSlots.findIndex(s => !s.occupiedBy && !s.reserved);
   }
   function spawnGroup(){
     if (groupsSpawned >= groupsNeeded) return;
-    const gx = WAIT.x + 20, gy = -GROUP_SIZE_PX;
-    const targetY = nextWaitingSlotY();
-    groupsMoving.push({
-      x:gx, y:gy, w:GROUP_SIZE_PX, h:GROUP_SIZE_PX,
+    const slotIdx = findFreeSlot();
+    if (slotIdx === -1) return; // pas de place -> on n'ajoute pas pour éviter superposition
+    const s = waitingSlots[slotIdx];
+    s.reserved = true;
+    const gx = WAIT.x + 20, gy = -GROUP_SIZE_PX; // spawn top
+    const g = {
+      x: gx, y: gy, w: GROUP_SIZE_PX, h: GROUP_SIZE_PX,
       clients: 2 + Math.floor(Math.random()*5), // 2..6
-      speed: 120,
-      targetY,
-      state:'moving',
-      satisfaction: 100
-    });
+      speed: GROUP_SPEED,
+      targetX: s.x, targetY: s.y, state: 'moving',
+      satisfaction: 100, slotIndex: slotIdx
+    };
+    groupsMoving.push(g);
     groupsSpawned++;
   }
 
-  // Interactions
+  // ===== Interaction E: prendre/poser =====
+  let selectedGroup = null;
   function tryPickOrAssign(){
     if (!selectedGroup){
-      // prendre un groupe dans la salle d'attente
+      // prendre un groupe depuis un slot de la salle d'attente
       for (let i=0;i<groupsWaiting.length;i++){
         const g = groupsWaiting[i];
-        if (Utils.rectsIntersect(PLAYER, Utils.inflateRect(g, 20, 20))){
+        if (Utils.rectsIntersect(player, Utils.inflateRect(g, 20, 20))){
+          // libère slot
+          const s = waitingSlots[g.slotIndex];
+          if (s) s.occupiedBy = null;
           selectedGroup = g;
           groupsWaiting.splice(i,1);
           return;
         }
       }
     } else {
-      // poser dans une salle libre
+      // poser dans une salle libre à proximité
       for (const r of rooms){
-        if (!r.occupied && Utils.rectsIntersect(PLAYER, Utils.inflateRect(r, 20, 20))){
+        if (!r.occupied && Utils.rectsIntersect(player, Utils.inflateRect(r, 20, 20))){
           r.occupied = true;
           r.group = selectedGroup;
-          r.timer = ROOM_BASE_TIME;
+          r.timer = 20; // 20s
           r.needHelp = false;
           r.helpTimer = 0;
           selectedGroup = null;
           return;
         }
       }
+      // sinon reposer dans la salle d'attente sur un slot libre
+      const idx = findFreeSlot();
+      if (idx !== -1){
+        const s = waitingSlots[idx];
+        s.occupiedBy = selectedGroup;
+        selectedGroup.x = s.x; selectedGroup.y = s.y; selectedGroup.slotIndex = idx;
+        groupsWaiting.push(selectedGroup);
+        selectedGroup = null;
+        s.reserved = false;
+      }
     }
   }
 
+  // ===== Aide (H) si dans le HQ =====
   function helpIfInHQ(){
-    const inside = Utils.rectsIntersect(PLAYER, HQ);
-    if (!inside) return;
+    if (!Utils.rectsIntersect(player, HQ)) return;
     for (const r of rooms){
-      if (r.occupied && r.needHelp){
-        r.needHelp = false;
-      }
+      if (r.occupied && r.needHelp) r.needHelp = false;
     }
   }
 
-  function canEndDay(){
-    if (groupsServed < groupsNeeded) return false;
-    if (groupsWaiting.length>0 || groupsMoving.length>0) return false;
-    if (rooms.some(r=>r.occupied)) return false;
-    return true;
-  }
-
-  // Mouvements & collisions
-  function moveWithWalls(ent, dx, dy){
-    ent.x += dx;
-    for (const w of WALLS){
-      if (Utils.rectsIntersect(ent, w)){
-        if (dx > 0) ent.x = w.x - ent.w;
-        else if (dx < 0) ent.x = w.x + w.w;
-      }
-    }
-    ent.y += dy;
-    for (const w of WALLS){
-      if (Utils.rectsIntersect(ent, w)){
-        if (dy > 0) ent.y = w.y - ent.h;
-        else if (dy < 0) ent.y = w.y + w.h;
-      }
-    }
-  }
-
-  // Update salles & économie
+  // ===== Update salles =====
   function updateRooms(dt){
     for (const r of rooms){
       if (!r.occupied) continue;
       r.timer -= dt;
-      if (r.group){
-        r.group.satisfaction = Utils.clamp(r.group.satisfaction - SAT_LOSS_PER_SEC*dt, 0, 100);
-      }
-      if (!r.needHelp && Math.random() < (HELP_CHANCE_PER_SEC*dt)){
-        r.needHelp = true;
-        r.helpTimer = HELP_WINDOW_SEC;
+      if (r.group) r.group.satisfaction = Utils.clamp(r.group.satisfaction - 2*dt, 0, 100);
+      // demande d'aide aléatoire
+      if (!r.needHelp && Math.random() < (0.06 * dt)){
+        r.needHelp = true; r.helpTimer = 30;
       }
       if (r.needHelp){
         r.helpTimer -= dt;
@@ -304,50 +257,190 @@
       if (r.timer <= 0){
         const pay = PRICE[r.class] * (r.group.satisfaction/100);
         money += Math.round(pay*100)/100;
-        groupsServed += 1;
-        r.occupied = false;
-        r.group = null;
-        r.needHelp = false;
-        r.helpTimer = 0;
-        r.timer = 0;
+        groupsServed++;
+        r.occupied=false; r.group=null; r.needHelp=false; r.helpTimer=0; r.timer=0;
       }
     }
   }
 
-  // Rendu
-  function roundRect(x,y,w,h,r,fill){
-    ctx.beginPath();
-    ctx.moveTo(x+r,y);
-    ctx.arcTo(x+w,y,x+w,y+h,r);
-    ctx.arcTo(x+w,y+h,x,y+h,r);
-    ctx.arcTo(x,y+h,x,y,r);
-    ctx.arcTo(x,y,x+w,y,r);
-    if (fill) ctx.fill(); else ctx.stroke();
+  // ===== Boutique minimal (conservée) =====
+  const overlay = document.getElementById('overlay');
+  const shopChoicesBox = document.getElementById('shopChoices');
+  const skipBtn = document.getElementById('skipBtn');
+  let shopOpen = false, shopChoices = [];
+  function openShop(){
+    shopChoices = [Utils.randRoom(), Utils.randRoom(), Utils.randRoom()];
+    shopChoicesBox.innerHTML = shopChoices.map((c,i)=>{
+      const price = PRICE[c.class];
+      const badgeColor = c.class==='S'?'#f8e46b':c.class==='A'?'#ffba73':c.class==='B'?'#7fe0e0':'#ddd';
+      return `
+        <div class="choice" style="display:flex;align-items:center;gap:12px;background:#f6f6f6;border:1px solid #cfcfcf;border-radius:10px;padding:12px;margin:10px 0;">
+          <div class="badge" style="background:${badgeColor};padding:2px 8px;border-radius:6px;font-weight:700;">${c.class}</div>
+          <div style="flex:1">
+            <div><b>${c.name}</b></div>
+            <div class="small">Prix : ${price}€</div>
+          </div>
+          <div class="small">Appuyez <span class="kbd">${i+1}</span></div>
+        </div>
+      `;
+    }).join('');
+    overlay.classList.remove('hidden');
+    shopOpen = true;
+  }
+  function closeShop(){
+    overlay.classList.add('hidden');
+    shopOpen = false;
+    day += 1; groupsNeeded += 2; groupsSpawned=0; groupsServed=0; spawnTimer=0;
+  }
+  skipBtn.addEventListener('click', closeShop);
+  document.addEventListener('keydown', e=>{
+    if (!shopOpen) return;
+    if (e.key === 'Escape') closeShop();
+    if (e.key === '1' || e.key === '2' || e.key === '3'){
+      const idx = parseInt(e.key)-1;
+      const c = shopChoices[idx];
+      if (c && addRoomAtNext(c)){
+        money -= PRICE[c.class];
+      }
+      closeShop();
+    }
+  });
+
+  // ===== Fin de journée (auto) =====
+  function canEndDay(){
+    if (groupsServed < groupsNeeded) return false;
+    if (groupsWaiting.length>0 || groupsMoving.length>0) return false;
+    if (rooms.some(r=>r.occupied)) return false;
+    return true;
   }
 
-  function drawLayout(){
-    // zones
-    ctx.strokeStyle = COLORS.green; ctx.lineWidth=3; roundRect(WAIT.x,WAIT.y,WAIT.w,WAIT.h,6,false);
-    ctx.strokeStyle = COLORS.red;   roundRect(HQ.x,HQ.y,HQ.w,HQ.h,6,false);
-    ctx.strokeStyle = COLORS.blue;  roundRect(MISSION.x, MISSION.y, MISSION.w, MISSION.h, 6, false);
-    // murs
-    ctx.fillStyle = COLORS.wall;
-    for (const w of WALLS) ctx.fillRect(w.x,w.y,w.w,w.h);
+  // ===== Loop =====
+  let last = performance.now();
+  function loop(now){
+    const dt = Math.min(0.05, (now - last)/1000);
+    last = now;
 
-    // tables en salle d'attente (indication)
-    ctx.strokeStyle = '#6ac36a';
-    for (let i=0;i<tablesCount;i++){
-      const ty = WAIT.y + 20 + i*(GROUP_SIZE_PX+10);
-      ctx.strokeRect(WAIT.x+12, ty-2, GROUP_SIZE_PX+6, GROUP_SIZE_PX+6);
+    // Input: ZQSD par défaut (+ flèches)
+    let dx=0, dy=0;
+    if (keys['q'] || keys['arrowleft'])  dx -= player.speed;
+    if (keys['d'] || keys['arrowright']) dx += player.speed;
+    if (keys['z'] || keys['arrowup'])    dy -= player.speed;
+    if (keys['s'] || keys['arrowdown'])  dy += player.speed;
+
+    // Actions
+    if (keys['e']) { tryPickOrAssign(); keys['e']=false; } // onshot
+    if (keys['h']) { helpIfInHQ(); keys['h']=false; }
+    if (keys['m'] && !shopOpen) { openShop(); keys['m']=false; }
+
+    // Mouvements avec collisions
+    moveWithWalls(player, dx, dy);
+
+    // Spawning
+    if (!shopOpen){
+      spawnTimer += dt;
+      if (spawnTimer >= GROUP_SPAWN_DELAY && groupsSpawned < groupsNeeded){
+        spawnTimer = 0; spawnGroup();
+      }
     }
 
-    // bouton aider
-    ctx.fillStyle = '#f0f0f0'; roundRect(BTN_HELP.x,BTN_HELP.y,BTN_HELP.w,BTN_HELP.h,6,true);
-    ctx.strokeStyle = COLORS.black; roundRect(BTN_HELP.x,BTN_HELP.y,BTN_HELP.w,BTN_HELP.h,6,false);
+    // Avancée des groupes vers slot réservé
+    const arrived = [];
+    for (const g of groupsMoving){
+      if (g.state!=='moving') continue;
+      const vx = g.targetX - g.x;
+      const vy = g.targetY - g.y;
+      const dist = Math.hypot(vx,vy);
+      const step = g.speed * dt;
+      if (dist <= step){
+        g.x = g.targetX; g.y = g.targetY;
+        g.state = 'waiting';
+        arrived.push(g);
+      } else {
+        g.x += (vx/dist)*step;
+        g.y += (vy/dist)*step;
+      }
+    }
+    for (const g of arrived){
+      // pose dans slot
+      const s = waitingSlots[g.slotIndex];
+      if (s){ s.occupiedBy = g; s.reserved = false; }
+      groupsMoving.splice(groupsMoving.indexOf(g),1);
+      groupsWaiting.push(g);
+    }
+
+    // Groupe sélectionné suit le joueur
+    if (selectedGroup){
+      selectedGroup.x = player.x - selectedGroup.w - 6;
+      selectedGroup.y = player.y + (player.h - selectedGroup.h)/2;
+    }
+
+    // Update salles
+    if (!shopOpen) updateRooms(dt);
+
+    // Fin de journée
+    if (!shopOpen && canEndDay()) openShop();
+
+    // Rendu
+    drawScene();
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ===== Collisions joueur avec murs =====
+  function moveWithWalls(ent, dx, dy){
+    // X
+    ent.x += dx;
+    for (const w of WALLS){
+      if (Utils.rectsIntersect(ent, w)){
+        if (dx > 0) ent.x = w.x - ent.w;
+        else if (dx < 0) ent.x = w.x + w.w;
+      }
+    }
+    // Y
+    ent.y += dy;
+    for (const w of WALLS){
+      if (Utils.rectsIntersect(ent, w)){
+        if (dy > 0) ent.y = w.y - ent.h;
+        else if (dy < 0) ent.y = w.y + w.h;
+      }
+    }
+    // Garde dans l'écran
+    ent.x = clamp(ent.x, 20, W()-20-ent.w);
+    ent.y = clamp(ent.y, 20, H()-20-ent.h);
+  }
+
+  // ===== Dessins =====
+  function drawScene(){
+    ctx.clearRect(0,0,W(),H());
+    drawLayout();
+    drawWaitingChairs();
+    drawRooms();
+    drawGroups();
+    drawPlayer();
+    drawHUD();
+  }
+  function drawLayout(){
+    // Zones
+    ctx.strokeStyle = COLORS.green; ctx.lineWidth=3; Utils.roundRect(ctx, WAIT.x, WAIT.y, WAIT.w, WAIT.h, 6, false);
+    ctx.strokeStyle = COLORS.red;   Utils.roundRect(ctx, HQ.x, HQ.y, HQ.w, HQ.h, 6, false);
+    ctx.strokeStyle = COLORS.blue;  Utils.roundRect(ctx, MISSION.x, MISSION.y, MISSION.w, MISSION.h, 6, false);
+    // Murs
+    ctx.fillStyle = COLORS.wall;
+    for (const w of WALLS) ctx.fillRect(w.x,w.y,w.w,w.h);
+    // Bouton aider (visuel)
+    ctx.fillStyle = '#f0f0f0'; Utils.roundRect(ctx, BTN_HELP.x, BTN_HELP.y, BTN_HELP.w, BTN_HELP.h, 6, true);
+    ctx.strokeStyle = COLORS.black; Utils.roundRect(ctx, BTN_HELP.x, BTN_HELP.y, BTN_HELP.w, BTN_HELP.h, 6, false);
     ctx.fillStyle = COLORS.black; ctx.font='16px Segoe UI, Arial';
     ctx.fillText('Aider (H)', BTN_HELP.x + 20, BTN_HELP.y + 23);
   }
-
+  function drawWaitingChairs(){
+    // Dessine chaises pour chaque slot
+    for (const s of waitingSlots){
+      const state = s.occupiedBy ? 'occupied' : (s.reserved ? 'reserved' : 'empty');
+      drawChair(s.x + (s.w-20)/2, s.y + (s.h-20)/2, 20, state);
+    }
+  }
   function drawRooms(){
     ctx.font = '14px Segoe UI, Arial';
     for (const r of rooms){
@@ -357,7 +450,6 @@
       ctx.fillStyle = COLORS.black;
       ctx.fillText(name, r.x+6, r.y+18);
       ctx.fillText(`(${r.class})`, r.x+6, r.y+36);
-
       if (r.occupied){
         ctx.fillText(`${Math.max(0, Math.floor(r.timer))}s`, r.x+r.w-32, r.y+18);
         if (r.needHelp){
@@ -368,24 +460,23 @@
       }
     }
   }
-
   function drawGroups(){
     ctx.font = '14px Segoe UI, Arial';
-    // approche
+    // moving
     for (const g of groupsMoving){
       ctx.fillStyle = COLORS.red;
       ctx.fillRect(g.x,g.y,g.w,g.h);
       ctx.fillStyle = COLORS.black;
       ctx.fillText(`${g.clients}p`, g.x+4, g.y-4);
     }
-    // attente
+    // waiting
     for (const g of groupsWaiting){
       ctx.fillStyle = COLORS.red;
       ctx.fillRect(g.x,g.y,g.w,g.h);
       ctx.fillStyle = COLORS.black;
       ctx.fillText(`${g.clients}p`, g.x+4, g.y-4);
     }
-    // suivi
+    // selected
     if (selectedGroup){
       const g = selectedGroup;
       ctx.fillStyle = '#ff8c8c';
@@ -394,128 +485,28 @@
       ctx.fillText(`${g.clients}p`, g.x+4, g.y-4);
     }
   }
-
   function drawPlayer(){
     ctx.fillStyle = '#5078ff';
-    ctx.fillRect(PLAYER.x, PLAYER.y, PLAYER.w, PLAYER.h);
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+  }
+  function drawHUD(){
+    const w=W(), h=H();
+    const ph=86, pw=Math.min(900, w-40), px=(w-pw)/2, py=h-ph-16;
+    ctx.fillStyle = COLORS.gray; Utils.roundRect(ctx, px,py,pw,ph,8, true);
+    ctx.strokeStyle = COLORS.black; ctx.lineWidth=1; Utils.roundRect(ctx, px,py,pw,ph,8, false);
+    ctx.fillStyle = COLORS.black; ctx.font='16px Segoe UI, Arial';
+    ctx.fillText(`Jour: ${day}   Argent: ${money.toFixed(2)}€`, px+12, py+24);
+    ctx.fillText(`Salles: ${rooms.length}   Groupes attendus: ${groupsNeeded}`, px+12, py+44);
+    ctx.fillText(`Apparus: ${groupsSpawned}   Servis: ${groupsServed}`, px+12, py+64);
+    ctx.fillText(`Contrôles: ZQSD / Flèches · E=prendre/poser · H=aider (QG) · M=boutique`, px+380, py+24);
   }
 
-  function hudPanel(){
-    const ph=92, pw=860, px=50, py=H-ph-20;
-    ctx.fillStyle = COLORS.gray; roundRect(px,py,pw,ph,8,true);
-    ctx.strokeStyle = COLORS.black; ctx.lineWidth=1; roundRect(px,py,pw,ph,8,false);
-    ctx.fillStyle = COLORS.black; ctx.font = '16px Segoe UI, Arial';
-    ctx.fillText(`Jour: ${day}   Argent: ${money.toFixed(2)}€   Loyer/j${rentEveryNDays}: ${rentBase + rentIncrease * rentsPaid}€`, px+12, py+24);
-    ctx.fillText(`Salles: ${rooms.length}   Tables: ${tablesCount}`, px+12, py+44);
-    ctx.fillText(`Groupes attendus: ${groupsNeeded} | Appar.: ${groupsSpawned} | Servis: ${groupsServed}`, px+12, py+64);
-    ctx.fillText(`Contrôles: Flèches/WASD · E=prendre/poser · H=aider(QG) · M=boutique`, px+430, py+24);
-    ctx.fillText(`1/2/3=Acheter salle · T=Acheter table · Échap=Ignorer`, px+430, py+44);
-  }
-
-  // Game Loop
-  let last = performance.now();
-  function loop(now){
-    const dt = Math.min(0.05, (now - last)/1000);
-    last = now;
-
-    // Mouvements joueur
-    let dx=0, dy=0;
-    if (keys['arrowleft']||keys['a']) dx -= PLAYER.speed;
-    if (keys['arrowright']||keys['d']) dx += PLAYER.speed;
-    if (keys['arrowup']||keys['w']) dy -= PLAYER.speed;
-    if (keys['arrowdown']||keys['s']) dy += PLAYER.speed;
-    if (!shopOpen) moveWithWalls(PLAYER, dx, dy);
-
-    // Spawn groupes
-    if (!shopOpen){
-      spawnTimer += dt;
-      if (spawnTimer >= GROUP_SPAWN_DELAY && groupsSpawned < groupsNeeded){
-        spawnTimer = 0; spawnGroup();
-      }
-    }
-
-    // Approche des groupes
-    const arrived = [];
-    for (const g of groupsMoving){
-      if (g.state!=='moving') continue;
-      if (g.y < g.targetY) g.y += g.speed * dt;
-      if (g.y >= g.targetY){
-        g.y = g.targetY; g.state='waiting'; arrived.push(g);
-      }
-    }
-    for (const g of arrived){
-      groupsMoving.splice(groupsMoving.indexOf(g),1);
-      groupsWaiting.push(g);
-    }
-
-    // Suivi du groupe sélectionné
-    if (selectedGroup){
-      selectedGroup.x = PLAYER.x - selectedGroup.w - 6;
-      selectedGroup.y = PLAYER.y + (PLAYER.h - selectedGroup.h)/2;
-    }
-
-    // Update salles
-    if (!shopOpen) updateRooms(dt);
-
-    // Fin de journée automatique
-    if (!shopOpen && canEndDay()){
-      openShop();
-    }
-
-    // Dessin
-    ctx.clearRect(0,0,W,H);
-    drawLayout();
-    drawRooms();
-    drawGroups();
-    drawPlayer();
-    hudPanel();
-
-    requestAnimationFrame(loop);
-  }
-
-  function moveWithWalls(ent, dx, dy){
-    ent.x += dx;
-    for (const w of WALLS){
-      if (Utils.rectsIntersect(ent, w)){
-        if (dx > 0) ent.x = w.x - ent.w;
-        else if (dx < 0) ent.x = w.x + w.w;
-      }
-    }
-    ent.y += dy;
-    for (const w of WALLS){
-      if (Utils.rectsIntersect(ent, w)){
-        if (dy > 0) ent.y = w.y - ent.h;
-        else if (dy < 0) ent.y = w.y + w.h;
-      }
-    }
-  }
-
-  // Inputs continus
-  function keyDown(e){ keys[e.key.toLowerCase()] = true; }
-  function keyUp(e){ keys[e.key.toLowerCase()] = false; }
-  document.addEventListener('keydown', keyDown);
-  document.addEventListener('keyup', keyUp);
-
-  // Touches déjà gérées pour boutique dans keydown de index
-  document.addEventListener('keydown', (e)=>{
-    if (shopOpen){
-      if (e.key === 'Escape'){ closeShop(true); }
-      if (e.key === '1'){ buyChoice(0); }
-      if (e.key === '2'){ buyChoice(1); }
-      if (e.key === '3'){ buyChoice(2); }
-      if (e.key.toLowerCase() === 't'){ buyTableBtn.click(); }
-    }
+  // ===== Input ponctuel (E/H/M) via press unique (déjà géré dans loop), plus cliquer pour E =====
+  document.addEventListener('keydown', e=>{
+    if (e.key.toLowerCase()==='e') e.preventDefault();
+    if (e.key.toLowerCase()==='h') e.preventDefault();
   });
 
-  // Ouvrir la boutique : prépare choix et loyer
-  function openShop(){
-    shopChoices = [Utils.randRoom(), Utils.randRoom(), Utils.randRoom()];
-    renderShop();
-    overlay.classList.remove('hidden');
-    shopOpen = true;
-    // loyer si dû
-    payRentIfDue();
-  }
-
-  requestAnimationFrame(loop);
+  // ===== Helper pour chaise (déjà défini plus haut) =====
+  function drawChair(x, y, size, state){ /* shadowed par haut mais nécessaire pour scope */ }
 })();
