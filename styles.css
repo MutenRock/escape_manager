@@ -11,11 +11,41 @@ html, body {
 #game {
   display: block;
   width: 100vw;
-  height: 100vh;    /* Canvas plein écran */
-  background: #fff; /* fond blanc jeu */
+  height: 100vh;            /* Canvas plein écran */
+  background: #fff;         /* fond blanc jeu */
 }
 
-/* Overlays (boutique) minimal */
+/* Panneau latéral d'infos */
+.stats-panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: min(320px, 30vw);
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  background: #1e1e1e;
+  color: #eaeaea;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.45);
+  z-index: 5;
+}
+.stats-panel h3 {
+  margin: 8px 0 6px;
+  font-size: 16px;
+  color: #ffd36b;
+}
+.stat {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 14px; padding: 4px 0; border-bottom: 1px solid #2a2a2a;
+}
+.stat:last-child { border-bottom: 0; }
+.stat span { color: #bcbcbc; }
+.stat b { color: #fff; font-weight: 700; }
+.help { margin: 6px 0 0 16px; color: #cfcfcf; font-size: 13px; }
+
+/* Overlays (boutique) */
 .overlay {
   position: fixed; inset: 0;
   display: flex; align-items: center; justify-content: center;
