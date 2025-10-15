@@ -1,0 +1,31 @@
+html,body { margin:0; background:#111; color:#111; font-family:system-ui, Segoe UI, Arial, sans-serif; }
+#wrap { display:flex; justify-content:center; padding:16px; }
+#game { background:#fff; border-radius:10px; box-shadow:0 10px 40px rgba(0,0,0,.35); }
+
+.overlay {
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.5); z-index:10;
+}
+.hidden { display:none; }
+.shop {
+  width:min(880px,92vw); background:#fff; color:#111; border-radius:12px; padding:22px;
+  box-shadow:0 12px 60px rgba(0,0,0,.6);
+}
+.shop h2 { margin:0 0 8px; }
+.shop-sub { margin:0 0 14px; color:#444; }
+
+.choice {
+  display:flex; align-items:center; gap:12px;
+  background:#f6f6f6; border:1px solid #cfcfcf; border-radius:10px; padding:12px; margin:10px 0;
+}
+.badge { padding:2px 8px; border-radius:6px; color:#111; font-weight:700; min-width:26px; text-align:center; }
+.clsS{ background:#f8e46b; } .clsA{ background:#ffba73; } .clsB{ background:#7fe0e0; } .clsC{ background:#ddd; }
+
+.shop-actions { display:flex; gap:10px; margin-top:8px; }
+.btn { background:#2b6ef6; color:white; border:none; border-radius:8px; padding:10px 14px; cursor:pointer; }
+.btn:hover{ filter:brightness(1.05); }
+.btn-ghost{ background:#eee; color:#222; }
+
+.kbd { font-family:ui-monospace,Consolas,Monaco,monospace; border:1px solid #aaa; padding:0 6px; border-radius:5px; background:#fafafa; }
+
+.rent-info { background:#fff7dd; border:1px solid #e8d39f; padding:8px 10px; border-radius:8px; margin:8px 0; }

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Escape Game Manager - Pré-alpha (HTML/JS)</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="960" height="640"></canvas>
+  </div>
+
+  <!-- Overlay Boutique -->
+  <div id="overlay" class="overlay hidden">
+    <div class="shop">
+      <h2>Boutique</h2>
+      <p class="shop-sub">Choisissez une salle (<span class="kbd">1</span>/<span class="kbd">2</span>/<span class="kbd">3</span>) ou achetez une table d’accueil (<span class="kbd">T</span>). <span class="kbd">Échap</span> pour ignorer.</p>
+      <div id="rentInfo" class="rent-info hidden"></div>
+      <div id="shopChoices"></div>
+      <div id="shopActions" class="shop-actions">
+        <button id="buyTableBtn" class="btn">Acheter une table d’accueil (40€)</button>
+        <button id="skipBtn" class="btn btn-ghost">Ignorer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay Game Over -->
+  <div id="overlayGameOver" class="overlay hidden">
+    <div class="shop">
+      <h2>Game Over</h2>
+      <p>Votre établissement est en faillite.</p>
+      <p><b>Astuce :</b> Acheter des salles de meilleure classe augmente vos gains.</p>
+      <button id="reloadBtn" class="btn">Recharger</button>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="utils.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
