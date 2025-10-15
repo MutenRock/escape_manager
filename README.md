@@ -1,110 +1,46 @@
-Escape Game Manager – HTML/JS (Pré-alpha)
+Escape Game Manager – HTML/JS (Pré-alpha ++)
+Nouvelles fonctionnalités majeures
 
-This patch upgrades the base game to a responsive, full-screen version with improved movement and waiting-room behavior (grid seating + chairs). It also preserves the shop/rooms loop from the previous iteration.
+Timer de journée: 100s et 3 équipes au jour 1. Augmente avec les jours (temps + équipes).
 
-✨ Nouvelles fonctionnalités
+Fin de journée via la porte de la salle d’attente (touche E, quand tout est vide) → Mode gestion :
 
-Ouverture au centre du mur séparateur (haut/bas) pour laisser passer le joueur.
+Récap avec compteur d’or qui s’incrémente (revenus – coûts des salles/employés).
 
-Contrôles ZQSD par défaut (flèches toujours disponibles).
+Boost quotidien (1 choix parmi 3 tirages biaisés).
 
-Canvas plein écran : s’adapte à la taille de la fenêtre, tout le layout est recalculé (QG, salle d’attente, zone missions, murs, grille).
+Boutique de salles + éditeur (grille) : placer / déplacer / détruire.
 
-Salle d’attente en quadrillage :
+Recrutement d’employés (2 candidats).
 
-Les groupes ne se superposent pas.
+Employés collisionnés avec les murs (cheminement via l’ouverture). Gestion automatique des équipes, aucune aide requise pour leurs missions.
 
-Chaque slot est matérialisé par une petite chaise (vectorielle via Path2D), avec états vide / réservé / occupé.
+Anti-double-assign: revalidation stricte à l’assignation (employé & joueur).
 
-Un slot est réservé quand un groupe est en approche, puis occupé à l’arrivée. Il est libéré quand le joueur prend le groupe (E).
+Effets visuels (⚙️💡❓) qui sortent des salles en activité.
 
-Si le joueur repose un groupe, il est replacé proprement dans un slot libre (sans chevauchement).
+Couleurs & prénoms visibles pour les employés.
 
-🕹️ Contrôles
+Menu principal avec nom de l’escape, choix de salle C de départ, paramètres, historique, succès.
 
-Z / Q / S / D (par défaut) ou Flèches : déplacer le joueur
+Achievements + fin de partie si argent < 0 : calcul de score, gain de tokens meta, sauvegarde en historique.
 
-E :
+Contrôles
 
-près d’un groupe en salle d’attente → prendre le groupe
+Z / Q / S / D ou Flèches : déplacement
 
-près d’une salle libre → assigner le groupe
+E : prendre/poser un groupe ; fin de journée via porte
 
-sinon → si un slot libre existe → reposer le groupe dans la salle d’attente
+H : aider (depuis le QG)
 
-H : dans le QG, aider toutes les salles demandant de l’aide (évite le -10 % de satisfaction)
+Souris : édition des salles (mode gestion)
 
-M : ouvrir la boutique (pour tests)
+Règles clés
 
-1 / 2 / 3 : acheter une salle (quand la boutique est ouverte)
+Satisfaction baisse continuellement ; une demande d’aide ignorée ↓ -10%.
 
-Échap : ignorer la boutique (passer au jour suivant)
+Paiement = prix base (par classe) × satisfaction.
 
-📦 Fichiers & Rôles
+Boutique des salles selon règles de classe (somme d’indices Objets/Thèmes).
 
-index.html
-Point d’entrée. Charge les scripts et affiche le canvas plein écran. Contient l’overlay de boutique (simplifié).
-
-styles.css
-Styles généraux, plein écran, overlays.
-
-data.js
-Listes Objets et Thèmes pour la génération des noms de salles.
-
-utils.js
-Utilitaires : couleurs, mapping classe par somme d’indices (règle utilisateur; 30..39 ⇒ B par hypothèse), fonctions géométriques, roundRect, etc.
-
-game.js
-Logique du jeu :
-
-Responsive layout + recalcul dynamique (zones, murs, grille de missions, grille des slots d’attente).
-
-Ouverture centrale dans le mur horizontal (calculée selon la taille d’écran).
-
-Déplacements ZQSD (+ flèches), collisions avec murs.
-
-Groupes qui arrivent du haut, réservent un slot, s’y posent, puis suivent le joueur et peuvent être assignés à une salle.
-
-Salles : timers, baisse de satisfaction, demandes d’aide avec fenêtre de 30 s (sinon -10 %).
-
-Boutique basique de fin de journée (3 salles aux classes déterminées par la règle « somme d’indices »).
-
-HUD : jour, argent, salles, groupes attendus/app., servis.
-
-⚙️ Notes Techniques
-
-Plein écran : le canvas suit window.innerWidth/innerHeight; la matrice est compensée par le devicePixelRatio pour un rendu net.
-
-Ouverture murale : le mur horizontal est coupé en 2 segments avec un gap central proportionnel à la largeur de l’écran (min 140 px).
-
-Grid d’attente :
-
-Taille de cellule = GROUP_SIZE_PX + 12.
-
-Nombre de colonnes/lignes calculé depuis la taille de la salle d’attente.
-
-Chaque slot : { x, y, w, h, occupiedBy, reserved }.
-
-Réservation : un slot passe à reserved = true lorsqu’un groupe est spawné vers lui; à l’arrivée le slot devient occupiedBy = group et reserved = false.
-
-Reflow : lors d’un redimensionnement, le layout est recomputé (zones, murs, grilles). Les entités sont re-clampées et les groupes en attente sont redispatchés sur les nouveaux slots.
-
-🔧 Paramètres clés (dans game.js)
-
-GROUP_SPEED = 140 (px/s)
-
-GROUP_SPAWN_DELAY = 3 (s)
-
-ROOM_BASE_TIME = 20 (s)
-
-SAT_LOSS_PER_SEC = 2.0
-
-HELP_CHANCE_PER_SEC = 0.06
-
-Classe par somme (dans utils.js) :
-<=9: S, 10..29: A, 40..79: B, 80..98: C, (30..39 ⇒ B par hypothèse)
-
-▶️ Démarrage
-
-Ouvrez index.html dans un navigateur moderne (Chrome, Edge, Firefox).
-Aucune dépendance externe.
+Coûts journaliers (maintenance salles + salaires) prélevés en fin de journée.

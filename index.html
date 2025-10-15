@@ -7,15 +7,15 @@
   <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
+  <!-- Main UI layers -->
   <canvas id="game"></canvas>
-
-  <!-- Panneau d'infos séparé -->
-  <aside id="statsPanel" class="stats-panel">
-    <h3>Établissement</h3>
+  <aside id="statsPanel" class="stats-panel hidden">
+    <h3 id="brandTitle">Établissement</h3>
+    <div class="stat"><span>Nom</span><b id="stat-brand">—</b></div>
     <div class="stat"><span>Jour</span><b id="stat-day">1</b></div>
     <div class="stat"><span>Argent</span><b id="stat-money">0€</b></div>
     <div class="stat"><span>Salles</span><b id="stat-rooms">0</b></div>
-    <div class="stat"><span>Groupes attendus</span><b id="stat-needed">0</b></div>
+    <div class="stat"><span>Équipes à servir</span><b id="stat-needed">0</b></div>
     <div class="stat"><span>Apparus</span><b id="stat-spawned">0</b></div>
     <div class="stat"><span>Servis</span><b id="stat-served">0</b></div>
     <div class="stat"><span>Fin de journée dans</span><b id="stat-daytime">--:--</b></div>
@@ -23,32 +23,108 @@
     <h3>Joueur</h3>
     <div class="stat"><span>Vitesse</span><b id="stat-speed">0</b></div>
     <div class="stat"><span>Position</span><b id="stat-pos">0,0</b></div>
-    <div class="stat"><span>Groupe suivi</span><b id="stat-following">Non</b></div>
+    <div class="stat"><span>Suit des groupes</span><b id="stat-following">0/0</b></div>
   </aside>
 
-  <!-- Overlay Boutique (Salles + Employés + Upgrade) -->
-  <div id="overlay" class="overlay hidden">
-    <div class="shop">
+  <!-- Overlay: Management Mode (end of day) -->
+  <div id="overlayMgmt" class="overlay hidden">
+    <div class="mgmt">
       <h2>Fin de journée</h2>
-      <p class="shop-sub">Boutique des salles, recrutement d’employés et amélioration quotidienne.</p>
 
-      <h3>Salles (1/2/3 pour acheter)</h3>
-      <div id="shopChoices"></div>
+      <section class="panel">
+        <h3>Récapitulatif</h3>
+        <div id="recap">
+          <div class="row"><span>Équipes servies</span><b id="recap-served">0</b></div>
+          <div class="row"><span>Revenus bruts</span><b id="recap-gross">0€</b></div>
+          <div class="row"><span>Coût des salles</span><b id="recap-roomcost">-0€</b></div>
+          <div class="row"><span>Salaires employés</span><b id="recap-empcost">-0€</b></div>
+          <div class="row total"><span>Total du jour</span><b id="recap-total">0€</b></div>
+          <div class="counter">
+            <div>Ajout à la caisse :</div>
+            <div id="recap-counter" class="ticker">+0€</div>
+          </div>
+          <button id="recap-continue" class="btn">Valider le bilan</button>
+        </div>
+      </section>
 
-      <h3>Employés</h3>
-      <div id="empChoices" class="emp-grid"></div>
+      <section id="upgradeSection" class="panel hidden">
+        <h3>Amélioration quotidienne (1 choix)</h3>
+        <div id="upgradeRow" class="upgrade-row"></div>
+        <button id="upgrade-continue" class="btn btn-ghost">Confirmer le choix</button>
+      </section>
 
-      <h3>Amélioration quotidienne</h3>
-      <div id="upgradeRow" class="upgrade-row"></div>
+      <div class="mgmt-grid">
+        <section class="panel">
+          <h3>Boutique & Éditeur de salles</h3>
+          <div class="editor">
+            <canvas id="editorCanvas" width="600" height="300"></canvas>
+            <div class="editor-legend">
+              <button id="btnPlaceMode" class="btn">Placer</button>
+              <button id="btnMoveMode" class="btn btn-ghost">Déplacer</button>
+              <button id="btnDeleteMode" class="btn btn-ghost">Détruire</button>
+            </div>
+          </div>
+          <div id="shopChoices" class="list"></div>
+        </section>
 
-      <div class="shop-actions">
-        <button id="skipBtn" class="btn btn-ghost">Terminer la journée</button>
+        <section class="panel">
+          <h3>Recrutement Employés</h3>
+          <div id="empChoices" class="emp-grid"></div>
+        </section>
+      </div>
+
+      <div class="bottom-actions">
+        <button id="mgmt-finish" class="btn">Lancer la journée suivante</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay: Main Menu -->
+  <div id="overlayMenu" class="overlay">
+    <div class="menu">
+      <h1 id="menuSign" class="wood-sign">—</h1>
+      <div class="menu-grid">
+        <button id="btnPlay" class="btn big">Jouer</button>
+        <button id="btnSettings" class="btn btn-ghost big">Paramètres</button>
+        <button id="btnHistory" class="btn btn-ghost big">Historique</button>
+        <button id="btnAchievements" class="btn btn-ghost big">Succès</button>
+      </div>
+
+      <div id="playFlow" class="panel hidden">
+        <h3>Nom de l'Escape</h3>
+        <input id="inputBrand" class="text" placeholder="Entrez le nom..." maxlength="24"/>
+        <h3>Choix de la salle initiale (Classe C)</h3>
+        <div id="startRooms" class="list"></div>
+        <button id="btnStartGame" class="btn">Démarrer</button>
+      </div>
+
+      <div id="settingsPanel" class="panel hidden">
+        <h3>Paramètres (touches)</h3>
+        <p>ZQSD / Flèches activées. (Stockées localement)</p>
+        <button id="btnBackSettings" class="btn btn-ghost">Retour</button>
+      </div>
+
+      <div id="historyPanel" class="panel hidden">
+        <h3>Historique des parties</h3>
+        <div id="historyList" class="list scroll"></div>
+        <button id="btnBackHistory" class="btn btn-ghost">Retour</button>
+      </div>
+
+      <div id="achPanel" class="panel hidden">
+        <h3>Succès</h3>
+        <div id="achList" class="list scroll"></div>
+        <button id="btnBackAch" class="btn btn-ghost">Retour</button>
       </div>
     </div>
   </div>
 
   <script src="data.js"></script>
   <script src="utils.js"></script>
+  <script src="state.js"></script>
+  <script src="achievements.js"></script>
+  <script src="rooms.js"></script>
+  <script src="employees.js"></script>
+  <script src="ui.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
