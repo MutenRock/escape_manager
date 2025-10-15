@@ -14,11 +14,10 @@
   }
   window.addEventListener('resize', resizeCanvas);
 
-  // >>> IMPORTANT: on n’utilise plus W/H avant d’être prêts (et pas de let W/H). <<<
   function viewW(){ return window.innerWidth; }
   function viewH(){ return window.innerHeight; }
 
-  // ===== Joueur (ZQSD par défaut + flèches) =====
+  // ===== Joueur (ZQSD + flèches) =====
   const player = { x: 200, y: 300, w: 40, h: 40, speed: 5.2 };
   const keys = {};
   document.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
@@ -483,11 +482,10 @@
     ctx.fillRect(player.x, player.y, player.w, player.h);
   }
   function drawHUD(){
-    // (HUD dessiné dans le panneau stat désormais – on garde le canvas propre)
+    // HUD intégré au panneau latéral, pas besoin d’overlay dans le canvas
   }
 
-  // Lancer après toute init
+  // ===== Start =====
   resizeCanvas();
-  let last = performance.now();
-  requestAnimationFrame(function tick(ts){ loop(ts); });
+  requestAnimationFrame(loop);
 })();
