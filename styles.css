@@ -5,17 +5,17 @@ html, body {
   background: #111;
   color: #111;
   font-family: system-ui, Segoe UI, Arial, sans-serif;
-  overflow: hidden; /* plein écran sans scroll */
+  overflow: hidden;
 }
 
 #game {
   display: block;
   width: 100vw;
-  height: 100vh;            /* Canvas plein écran */
-  background: #fff;         /* fond blanc jeu */
+  height: 100vh;
+  background: #fff;
 }
 
-/* Panneau latéral d'infos */
+/* Panel stats */
 .stats-panel {
   position: fixed;
   top: 12px;
@@ -43,24 +43,44 @@ html, body {
 .stat:last-child { border-bottom: 0; }
 .stat span { color: #bcbcbc; }
 .stat b { color: #fff; font-weight: 700; }
-.help { margin: 6px 0 0 16px; color: #cfcfcf; font-size: 13px; }
 
-/* Overlays (boutique) */
-.overlay {
-  position: fixed; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,.5);
-  z-index: 10;
-}
+/* Overlay shop */
+.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); z-index: 10; }
 .hidden { display: none; }
 .shop {
-  width: min(860px, 92vw);
+  width: min(980px, 96vw);
   background: #fff; color: #111; border-radius: 12px; padding: 22px;
   box-shadow: 0 12px 60px rgba(0,0,0,.6);
 }
 .shop h2 { margin: 0 0 8px; }
+.shop h3 { margin: 12px 0 8px; }
 .shop-sub { margin: 0 0 14px; color: #444; }
 .shop-actions { display: flex; gap: 10px; margin-top: 10px; }
 .btn { background: #2b6ef6; color: white; border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
 .btn-ghost { background: #eee; color: #222; }
+
+.choice {
+  display: flex; align-items: center; gap: 12px;
+  background: #f6f6f6; border: 1px solid #cfcfcf; border-radius: 10px;
+  padding: 12px; margin: 10px 0;
+}
+.badge { padding: 2px 8px; border-radius: 6px; color: #111; font-weight: 700; min-width: 26px; text-align: center; }
+.clsS{ background:#f8e46b; } .clsA{ background:#ffba73; } .clsB{ background:#7fe0e0; } .clsC{ background:#ddd; }
 .kbd { font-family: ui-monospace, Consolas, Monaco, monospace; border: 1px solid #aaa; padding: 0 6px; border-radius: 5px; background: #fafafa; }
+
+/* Employees */
+.emp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.emp-card {
+  background:#f6f6f6; border:1px solid #cfcfcf; border-radius:10px; padding:12px;
+  display:flex; flex-direction:column; gap:6px;
+}
+.emp-card .row { display:flex; justify-content:space-between; font-size:14px; }
+.emp-card .actions { display:flex; gap:8px; margin-top:6px; }
+.emp-tag { background:#222; color:#fff; border-radius:6px; padding:2px 8px; font-size:12px; }
+
+/* Upgrades */
+.upgrade-row { display:flex; gap:8px; flex-wrap:wrap; }
+.upg {
+  background:#eef4ff; border:1px solid #bcd0ff; border-radius:10px; padding:10px; cursor:pointer;
+}
+.upg.disabled{ opacity:.5; pointer-events:none; }

@@ -1,4 +1,3 @@
-// Couleurs / prix / classes
 window.COLORS = {
   white:'#ffffff', black:'#000000', gray:'#d2d2d2',
   blue:'#5c8cff', red:'#f05a5a', green:'#78e678',
@@ -7,7 +6,6 @@ window.COLORS = {
 window.CLASS_COLOR = { C: COLORS.gray, B: COLORS.cyan, A: COLORS.orange, S: COLORS.yellow };
 window.PRICE = { C: 40, B: 60, A: 90, S: 140 };
 
-// Règle classes via somme des indices (avec 30..39 -> B par hypothèse)
 function classFromSum(sum){
   if (sum <= 9) return 'S';
   if (sum <= 29) return 'A';
@@ -21,12 +19,10 @@ function randRoom(){
   return { name: `${OBJECTS[oi]} - ${THEMES[ti]}`, class: classFromSum(oi+ti) };
 }
 
-// Géo utils
 function rectsIntersect(a,b){ return (a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y); }
-function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 function inflateRect(r,ix,iy){ return {x:r.x-ix, y:r.y-iy, w:r.w+ix*2, h:r.h+iy*2}; }
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 
-// Dessin util
 function roundRect(ctx,x,y,w,h,r,fill=true){
   ctx.beginPath();
   ctx.moveTo(x+r,y);
@@ -37,4 +33,22 @@ function roundRect(ctx,x,y,w,h,r,fill=true){
   if (fill) ctx.fill(); else ctx.stroke();
 }
 
-window.Utils = { classFromSum, randRoom, rectsIntersect, inflateRect, clamp, roundRect };
+// Darken hex color by factor (0..1)
+function darken(hex, factor=0.25){
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if(!m) return hex;
+  let r = parseInt(m[1],16), g = parseInt(m[2],16), b = parseInt(m[3],16);
+  r = Math.max(0, Math.min(255, Math.floor(r*(1-factor))));
+  g = Math.max(0, Math.min(255, Math.floor(g*(1-factor))));
+  b = Math.max(0, Math.min(255, Math.floor(b*(1-factor))));
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+// Biased int in [min,max], bias towards min (k>1 stronger)
+function biasedInt(min, max, k=2.2){
+  const u = Math.random();
+  const b = 1 - Math.pow(1 - u, k); // skew low
+  return Math.round(min + b * (max - min));
+}
+
+window.Utils = { classFromSum, randRoom, rectsIntersect, inflateRect, clamp, roundRect, darken, biasedInt };

@@ -18,29 +18,31 @@
     <div class="stat"><span>Groupes attendus</span><b id="stat-needed">0</b></div>
     <div class="stat"><span>Apparus</span><b id="stat-spawned">0</b></div>
     <div class="stat"><span>Servis</span><b id="stat-served">0</b></div>
+    <div class="stat"><span>Fin de journée dans</span><b id="stat-daytime">--:--</b></div>
 
     <h3>Joueur</h3>
     <div class="stat"><span>Vitesse</span><b id="stat-speed">0</b></div>
     <div class="stat"><span>Position</span><b id="stat-pos">0,0</b></div>
     <div class="stat"><span>Groupe suivi</span><b id="stat-following">Non</b></div>
-
-    <h3>Contrôles</h3>
-    <ul class="help">
-      <li>ZQSD/Flèches : bouger</li>
-      <li>E : prendre/poser</li>
-      <li>H : aider (dans le QG)</li>
-      <li>M : boutique</li>
-    </ul>
   </aside>
 
-  <!-- Overlay Boutique (inchangé) -->
+  <!-- Overlay Boutique (Salles + Employés + Upgrade) -->
   <div id="overlay" class="overlay hidden">
     <div class="shop">
-      <h2>Boutique</h2>
-      <p class="shop-sub">Choisissez une salle (<span class="kbd">1</span>/<span class="kbd">2</span>/<span class="kbd">3</span>) — <span class="kbd">Échap</span> pour ignorer.</p>
+      <h2>Fin de journée</h2>
+      <p class="shop-sub">Boutique des salles, recrutement d’employés et amélioration quotidienne.</p>
+
+      <h3>Salles (1/2/3 pour acheter)</h3>
       <div id="shopChoices"></div>
+
+      <h3>Employés</h3>
+      <div id="empChoices" class="emp-grid"></div>
+
+      <h3>Amélioration quotidienne</h3>
+      <div id="upgradeRow" class="upgrade-row"></div>
+
       <div class="shop-actions">
-        <button id="skipBtn" class="btn btn-ghost">Ignorer</button>
+        <button id="skipBtn" class="btn btn-ghost">Terminer la journée</button>
       </div>
     </div>
   </div>
